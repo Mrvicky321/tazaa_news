@@ -2,9 +2,9 @@ const mysql = require("mysql2/promise");
 
 const poolConfig = {
     host: "217.21.87.103",
-    user: "u205680228_tazaa_news",
-    password: "Sharma@vicky",
-    database: "u205680228_TazaNews",
+    user: "u205680228_vicky_sharma",
+    password: "Sharma@vicky13",
+    database: "u205680228_tazaa_news",
     port: 3306,   // FIXED PORT
     waitForConnections: true,
     connectionLimit: 10,
