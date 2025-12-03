@@ -3,6 +3,7 @@ const db = require("./db");
 const app = express();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const multer = require("multer");
 app.use(express.json());
 
 const secretKey = "ghdfjjgi9ew8865w";
@@ -215,6 +216,44 @@ app.get("/api/categories", async (req, res) => {
         res.status(500).json({ message: "Error fetching categories" });
     }
 });
+
+
+
+
+
+
+
+app.use(express.json()); // adding middle ware
+const storage = multer.diskStorage({
+  destination: "./profileImages",
+  filename: (request, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+})
+const upload = multer({ storage: storage });
+
+app.use("/profileImages", express.static("profileImages")) // for allowing image by url=http://127.0.0.1:3000/profileImages/1761380677453.png
+
+app.post("/api/user/profile", upload.single("profilePic"), (req, res) => {
+  if (!req.file) {
+
+    res.status(400).json({
+      message: "Please upload profile pic or select"
+    });
+  } else {
+    const filename = req.file.path;
+    const id = req.body.id;
+     db.query("UPDATE users SET profilePic=? WHERE id=?",[filename, id] ,(eror, result)=>{
+        console.log(eror);
+    if(eror) return response.status(500).json({message : "Server internal error" + eror});
+    response.status(201).json({id: result.insertId, name : name, email: email});
+    });
+    res.status(200).json({
+      message: "Profile pic uploaded"
+    });
+  }
+});
+
 
 // ======================================================
 // START SERVER
