@@ -176,12 +176,14 @@ app.post("/api/user/profile", upload.single("profilePic"), (req, res) => {
 //GET SINGLE USERS USING TOKEN
 
 app.get("/api/user/profile", async (req, res) => {
-    const token = req.headers.authorization;
+    const authHeader = req.headers.authorization;
     const secretKey = "ghdfjjgi9ew8865w";
 
-    if (!token) {
+    if (!authHeader) {
         return res.status(401).json({ message: "Token required" });
     }
+
+    const token = authHeader.split(" ")[1]; // FIXED
 
     try {
         // Verify Token
@@ -194,27 +196,22 @@ app.get("/api/user/profile", async (req, res) => {
             [userId]
         );
 
-        // ⭐ ADD BASE URL
         const BASE_URL = "https://tazaa-news.onrender.com";
 
-        // ⭐ Convert profile_image filename → Full URL
         user.profile_image = user.profile_image
             ? `${BASE_URL}/uploads/profile/${user.profile_image}`
             : null;
 
-        // Followers Count
         const [[followers]] = await db.query(
             "SELECT COUNT(*) AS total FROM followers WHERE following_id=?",
             [userId]
         );
 
-        // Following Count
         const [[following]] = await db.query(
             "SELECT COUNT(*) AS total FROM followers WHERE follower_id=?",
             [userId]
         );
 
-        // Posts Count
         const [[posts]] = await db.query(
             "SELECT COUNT(*) AS total FROM posts WHERE user_id=?",
             [userId]
@@ -230,10 +227,10 @@ app.get("/api/user/profile", async (req, res) => {
         });
 
     } catch (error) {
-        console.log(error);
         return res.status(401).json({ message: "Invalid or expired token" });
     }
 });
+
 
 
 app.post("/api/like", async (req, res) => {
