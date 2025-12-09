@@ -4,6 +4,7 @@ const app = express();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
+const e = require("express");
 app.use(express.json());
 
 const secretKey = "ghdfjjgi9ew8865w";
@@ -117,93 +118,7 @@ app.get("/api/news/:id", async (req, res) => {
     }
 });
 
-// ======================================================
-// CREATE NEWS (ADMIN ONLY)
-// ======================================================
-app.post("/api/news/create", async (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
 
-    if (!token) return res.status(403).json({ message: "Token missing" });
-
-    try {
-        const user = jwt.verify(token, secretKey);
-        if (user.role !== "admin") {
-            return res.status(403).json({ message: "Admin only" });
-        }
-
-        const { title, content, image, category } = req.body;
-
-        const [result] = await db.query(
-            "INSERT INTO news(title, content, image, category) VALUES (?, ?, ?, ?)",
-            [title, content, image, category]
-        );
-
-        res.status(201).json({
-            id: result.insertId,
-            title,
-            content,
-            image,
-            category
-        });
-
-    } catch (error) {
-        res.status(500).json({ message: "Error creating news" });
-    }
-});
-
-// ======================================================
-// UPDATE NEWS (ADMIN ONLY)
-// ======================================================
-app.put("/api/news/:id", async (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-
-    if (!token) return res.status(403).json({ message: "Token missing" });
-
-    try {
-        const user = jwt.verify(token, secretKey);
-        if (user.role !== "admin") {
-            return res.status(403).json({ message: "Admin only" });
-        }
-
-        const newsId = req.params.id;
-        const { title, content, image, category } = req.body;
-
-        await db.query(
-            "UPDATE news SET title=?, content=?, image=?, category=? WHERE id=?",
-            [title, content, image, category, newsId]
-        );
-
-        res.status(200).json({ message: "News updated" });
-
-    } catch (error) {
-        res.status(500).json({ message: "Error updating news" });
-    }
-});
-
-// ======================================================
-// DELETE NEWS (ADMIN ONLY)
-// ======================================================
-app.delete("/api/news/:id", async (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-
-    if (!token) return res.status(403).json({ message: "Token missing" });
-
-    try {
-        const user = jwt.verify(token, secretKey);
-        if (user.role !== "admin") {
-            return res.status(403).json({ message: "Admin only" });
-        }
-
-        const newsId = req.params.id;
-
-        await db.query("DELETE FROM news WHERE id=?", [newsId]);
-
-        res.status(200).json({ message: "News deleted" });
-
-    } catch (error) {
-        res.status(500).json({ message: "Error deleting news" });
-    }
-});
 
 // ======================================================
 // GET CATEGORIES
@@ -250,9 +165,208 @@ app.post("/api/user/profile", upload.single("profilePic"), (req, res) => {
     });
     res.status(200).json({
       message: "Profile pic uploaded"
+
+    
     });
   }
 });
+
+
+
+//GET SINGLE USERS USING TOKEN
+
+app.get("/api/user/profile", async (req, res) => {
+    const token = req.headers.authorization;
+    const secretKey = "asdfghjkl";
+
+    if (!token) {
+        return res.status(401).json({ message: "Token required" });
+    }
+
+    try {
+        // Verify Token
+        const decoded = jwt.verify(token, secretKey);
+        const userId = decoded.id;
+
+        // Get Profile info
+        const [[user]] = await db.query(
+            "SELECT id, name, username, email, bio, profile_image FROM users WHERE id=?",
+            [userId]
+        );
+
+        // ⭐ ADD BASE URL
+        const BASE_URL = "https://tazaa-news.onrender.com";
+
+        // ⭐ Convert profile_image filename → Full URL
+        user.profile_image = user.profile_image
+            ? `${BASE_URL}/uploads/profile/${user.profile_image}`
+            : null;
+
+        // Followers Count
+        const [[followers]] = await db.query(
+            "SELECT COUNT(*) AS total FROM followers WHERE following_id=?",
+            [userId]
+        );
+
+        // Following Count
+        const [[following]] = await db.query(
+            "SELECT COUNT(*) AS total FROM followers WHERE follower_id=?",
+            [userId]
+        );
+
+        // Posts Count
+        const [[posts]] = await db.query(
+            "SELECT COUNT(*) AS total FROM posts WHERE user_id=?",
+            [userId]
+        );
+
+        return res.json({
+            user,
+            stats: {
+                followers: followers.total,
+                following: following.total,
+                posts: posts.total
+            }
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(401).json({ message: "Invalid or expired token" });
+    }
+});
+
+
+app.post("/api/like", async (req, res) => {
+    const { user_id, post_id } = req.body;
+
+    try {
+        await db.query(
+          "INSERT INTO likes(user_id, post_id) VALUES(?, ?)", 
+          [user_id, post_id]
+        );
+
+        res.status(201).json({ message: "Post Liked" });
+
+    } catch (err) {
+        if (err.errno === 1062) {
+            return res.status(409).json({ message: "Already Liked" });
+        }
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+
+app.post("/api/unlike", async (req, res) => {
+    const { user_id, post_id } = req.body;
+
+    try {
+        await db.query(
+          "DELETE FROM likes WHERE user_id=? AND post_id=?", 
+          [user_id, post_id]
+        );
+
+        res.status(200).json({ message: "Like Removed" });
+
+    } catch (err) {
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+
+app.post("/api/comment", async (req, res) => {
+    const { user_id, post_id, comment } = req.body;
+
+    try {
+        const [result] = await db.query(
+          "INSERT INTO comments(user_id, post_id, comment) VALUES(?, ?, ?)",
+          [user_id, post_id, comment]
+        );
+
+        res.status(201).json({
+            id: result.insertId,
+            comment: comment
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+
+app.get("/api/comment/:post_id", async (req, res) => {
+    const postId = req.params.post_id;
+
+    try {
+        const [rows] = await db.query(
+          "SELECT c.id, c.comment, u.name FROM comments c JOIN users u ON c.user_id=u.id WHERE post_id=? ORDER BY c.id DESC",
+          [postId]
+        );
+
+        res.status(200).json(rows);
+
+    } catch (err) {
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+
+
+
+app.post("/api/follow", async (req, res) => {
+    const { follower_id, following_id } = req.body;
+
+    try {
+        await db.query(
+            "INSERT INTO follows(follower_id, following_id) VALUES(?, ?)",
+            [follower_id, following_id]
+        );
+
+        res.status(201).json({ message: "User Followed" });
+
+    } catch (err) {
+        if (err.errno === 1062) {
+            return res.status(409).json({ message: "Already Following" });
+        }
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+
+app.post("/api/unfollow", async (req, res) => {
+    const { follower_id, following_id } = req.body;
+
+    try {
+        await db.query(
+            "DELETE FROM follows WHERE follower_id=? AND following_id=?",
+            [follower_id, following_id]
+        );
+
+        res.status(200).json({ message: "Unfollowed" });
+
+    } catch (err) {
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+
+app.post("/api/share", async (req, res) => {
+    const { user_id, post_id } = req.body;
+
+    try {
+        await db.query(
+            "INSERT INTO post_share(user_id, post_id) VALUES(?, ?)",
+            [user_id, post_id]
+        );
+
+        res.status(201).json({ message: "Post Shared" });
+
+    } catch (err) {
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+
+
 
 
 // ======================================================
