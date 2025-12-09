@@ -177,7 +177,7 @@ app.post("/api/user/profile", upload.single("profilePic"), (req, res) => {
 
 app.get("/api/user/profile", async (req, res) => {
     const token = req.headers.authorization;
-    const secretKey = "asdfghjkl";
+    const secretKey = "ghdfjjgi9ew8865w";
 
     if (!token) {
         return res.status(401).json({ message: "Token required" });
