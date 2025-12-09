@@ -7,7 +7,7 @@ const multer = require("multer");
 const e = require("express");
 app.use(express.json());
 
-const secretKey = "ghdfjjgi9ew8865w";
+
 
 // ======================================================
 // USER LIST
@@ -54,6 +54,8 @@ app.post("/api/user/register", async (request, response) => {
 app.post("/api/user/login", async (request, response) => {
     const email = request.body.email;
     const password = request.body.password;
+
+    const secretKey = "ghdfjjgi9ew8865w";
 
     try {
         const [result] = await db.query(
@@ -175,18 +177,39 @@ app.post("/api/user/profile", upload.single("profilePic"), (req, res) => {
 
 //GET SINGLE USERS USING TOKEN
 
-app.get("/client",(request, response)=>{
-    const token = request.headers.authorization;
-    const secretKey = "uiop";
+app.get("/api/user/profile", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const secretKey = "ghdfjjgi9ew8865w";
+    
 
-    jwt.verify(token, secretKey,(error, result)=>{
-        if(error){
-            response.status(400).json({message: "unathorized"})
-        }else{
-            response.status(200).json({result});
+    if (!authHeader) {
+        return res.status(401).json({ message: "Token required" });
+    }
+
+    const token = authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : authHeader;
+
+    try {
+        const decoded = jwt.verify(token, secretKey);
+        const userId = decoded.id;
+
+        const [[user]] = await db.query(
+            "SELECT id, name, email, profilePic FROM users WHERE id=?",
+            [userId]
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
         }
-    })
-})
+
+        res.json({ user });
+
+    } catch (error) {
+        res.status(401).json({ message: "Invalid or expired token" });
+    }
+});
+
 
 
 app.post("/api/like", async (req, res) => {
