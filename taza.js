@@ -5,6 +5,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const e = require("express");
+const path = require("path");
 app.use(express.json());
 
 
