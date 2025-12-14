@@ -140,45 +140,38 @@ app.get("/api/categories", async (req, res) => {
 
 
 
-app.use(express.json()); // adding middle ware
 const storage = multer.diskStorage({
-  destination: "./profileImages",
-  filename: (request, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
-})
-const upload = multer({ storage: storage });
-
-app.use("/profileImages", express.static("profileImages")) // for allowing image by url=http://127.0.0.1:3000/profileImages/1761380677453.png
-
-
-
-// ---------------------------------------------------
-// UPLOAD PROFILE PICTURE  (FINAL FIXED VERSION)
-// ---------------------------------------------------
-app.post("/api/user/profile", upload.single("profilePic"), async (req, res) => {
-  if (!req.file)
-    return res.status(400).json({ message: "Please upload profilePic" });
-
-  const filename = req.file.filename;
-  const id = req.body.id;
-
-  try {
-    await db.query(
-      "UPDATE users SET profilePic=? WHERE id=?",
-      [filename, id]
-    );
-
-    res.json({
-      message: "Profile Picture Updated",
-      file: filename,
-      url: `${req.protocol}://${req.get("host")}/profileImages/${filename}`
-    });
-
-  } catch (err) {
-    res.status(500).json({ message: "Server Error", error: err });
-  }
+    destination:"./profileImages",
+   filename:(request, file, cb)=>{
+    cb(null, Date.now() + path.extname(file.originalname) );
+   }
 });
+
+const upload = multer({storage: storage});  
+
+app.use("/profileImages", express.static("profileImages")) // allowing to access picture through url
+
+app.post("/api/profile", upload.single("profilePic"),(req,res)=>{
+    if(!req.file){
+       
+        res.status(400).json({
+            message: "Please upload profile pic or select"
+        });
+    }else{
+
+        const fileName = req.file.path;
+        const id = req.body.id;
+
+       db.query("UPDATE users SET profilePic=? WHERE id=?",[fileName, id],(error, result)=>{
+        if(error) return res.status(500).json({message : "Server internal error"})
+        res.status(201).json(result);
+       });
+
+        res.status(200).json({
+            message: "Profile pic uploadedd"
+        });
+    } 
+})
 
 
 
