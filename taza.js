@@ -141,26 +141,28 @@ app.get("/api/categories", async (req, res) => {
 
 
 
-const storage = multer.diskStorage({
-  destination: "./profileImages",
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
+// ==========================
+// PROFILE UPDATE
+// ==========================
+const profileStorage = multer.diskStorage({
+  destination: "./profileImages", // folder path
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 
-const upload = multer({ storage });
+const uploadProfile = multer({ storage: profileStorage });
 
-app.use("/profileImages", express.static("profileImages")); // serve images
-
-app.post("/api/user/update-profile", upload.single("profilePic"), async (req, res) => {
+app.post("/api/user/update-profile", uploadProfile.single("profilePic"), async (req, res) => {
   try {
-    const { id, name, email } = req.body;
+    const id = req.body.id;
+    const name = req.body.name;
+    const email = req.body.email;
+    const profilePic = req.file ? req.file.filename : null;
 
     if (!id) {
       return res.status(400).json({ message: "User id required" });
     }
 
-    // Build dynamic query without bio
+    // Build dynamic query
     let fields = [];
     let values = [];
 
@@ -172,11 +174,9 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
       fields.push("email=?");
       values.push(email);
     }
-    let profilePicPath;
-    if (req.file) {
-      profilePicPath = `profileImages/${req.file.filename}`;
+    if (profilePic) {
       fields.push("profilePic=?");
-      values.push(profilePicPath);
+      values.push(profilePic);
     }
 
     if (fields.length === 0) {
@@ -186,13 +186,12 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
     values.push(id);
     const sql = `UPDATE users SET ${fields.join(", ")} WHERE id=?`;
 
-    // ✅ Use await with promise style
-    const [result] = await db.promise().query(sql, values);
+    // Callback-free style using async/await
+    await db.query(sql, values);
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Profile updated successfully",
-      profilePic: profilePicPath,
-      result: result
+      profilePic: profilePic ? `profileImages/${profilePic}` : undefined,
     });
 
   } catch (err) {
@@ -200,6 +199,7 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
     return res.status(500).json({ message: "Server error", error: err.message });
   }
 });
+
 
 
 
