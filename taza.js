@@ -139,7 +139,7 @@ app.get("/api/categories", async (req, res) => {
 
 
 
-
+//update user profile with picture upload
 
 const storage = multer.diskStorage({
     destination:"./profileImages",
@@ -152,27 +152,61 @@ const upload = multer({storage: storage});
 
 app.use("/profileImages", express.static("profileImages")) // allowing to access picture through url
 
-app.post("/api/profile", upload.single("profilePic"),(req,res)=>{
-    if(!req.file){
-       
-        res.status(400).json({
-            message: "Please upload profile pic or select"
-        });
-    }else{
+app.post("/api/user/update-profile", upload.single("profilePic"), async (req, res) => {
+  const { id, name, email, bio } = req.body;
 
-        const fileName = req.file.path;
-        const id = req.body.id;
+  if (!id) {
+    return res.status(400).json({ message: "User id required" });
+  }
 
-       db.query("UPDATE users SET profilePic=? WHERE id=?",[fileName, id],(error, result)=>{
-        if(error) return res.status(500).json({message : "Server internal error"})
-        res.status(201).json(result);
-       });
+  let fields = [];
+  let values = [];
 
-        res.status(200).json({
-            message: "Profile pic uploadedd"
-        });
-    } 
-})
+  if (name) {
+    fields.push("name=?");
+    values.push(name);
+  }
+
+  if (email) {
+    fields.push("email=?");
+    values.push(email);
+  }
+
+  if (bio) {
+    fields.push("bio=?");
+    values.push(bio);
+  }
+
+  if (req.file) {
+    const profilePicPath = `profileImages/${req.file.filename}`;
+    fields.push("profilePic=?");
+    values.push(profilePicPath);
+  }
+
+  if (fields.length === 0) {
+    return res.status(400).json({ message: "Nothing to update" });
+  }
+
+  values.push(id);
+
+  const sql = `UPDATE users SET ${fields.join(", ")} WHERE id=?`;
+
+  db.query(sql, values, (error, result) => {
+    if (error) {
+      return res.status(500).json({ message: "Server internal error" });
+    }
+
+    res.status(200).json({
+      message: "Profile updated successfully",
+      profilePic: req.file ? `profileImages/${req.file.filename}` : undefined
+    });
+  });
+});
+
+
+
+
+
 
 
 
