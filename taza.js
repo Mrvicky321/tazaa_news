@@ -139,7 +139,7 @@ app.get("/api/categories", async (req, res) => {
 
 
 
-//update user profile with picture upload
+
 
 const storage = multer.diskStorage({
   destination: "./profileImages",
@@ -154,13 +154,13 @@ app.use("/profileImages", express.static("profileImages")); // serve images
 
 app.post("/api/user/update-profile", upload.single("profilePic"), async (req, res) => {
   try {
-    const { id, name, email, bio } = req.body;
+    const { id, name, email } = req.body;
 
     if (!id) {
       return res.status(400).json({ message: "User id required" });
     }
 
-    // ✅ Build dynamic query
+    // ✅ Build dynamic query without bio
     let fields = [];
     let values = [];
 
@@ -171,10 +171,6 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
     if (email) {
       fields.push("email=?");
       values.push(email);
-    }
-    if (bio) {
-      fields.push("bio=?");
-      values.push(bio);
     }
     let profilePicPath = undefined;
     if (req.file) {
@@ -190,7 +186,6 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
     values.push(id);
     const sql = `UPDATE users SET ${fields.join(", ")} WHERE id=?`;
 
-    // ✅ Wrap DB query in try/catch to prevent crash
     db.query(sql, values, (error, result) => {
       if (error) {
         console.error("DB Error:", error);
@@ -207,7 +202,6 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
     return res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-
 
 
 
