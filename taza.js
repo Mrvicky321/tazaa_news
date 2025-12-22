@@ -160,7 +160,7 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
       return res.status(400).json({ message: "User id required" });
     }
 
-    // ✅ Build dynamic query without bio
+    // Build dynamic query without bio
     let fields = [];
     let values = [];
 
@@ -172,7 +172,7 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
       fields.push("email=?");
       values.push(email);
     }
-    let profilePicPath = undefined;
+    let profilePicPath;
     if (req.file) {
       profilePicPath = `profileImages/${req.file.filename}`;
       fields.push("profilePic=?");
@@ -186,17 +186,15 @@ app.post("/api/user/update-profile", upload.single("profilePic"), async (req, re
     values.push(id);
     const sql = `UPDATE users SET ${fields.join(", ")} WHERE id=?`;
 
-    db.query(sql, values, (error, result) => {
-      if (error) {
-        console.error("DB Error:", error);
-        return res.status(500).json({ message: "Server internal error", error: error.message });
-      }
+    // ✅ Use await with promise style
+    const [result] = await db.promise().query(sql, values);
 
-      return res.status(200).json({
-        message: "Profile updated successfully",
-        profilePic: profilePicPath,
-      });
+    return res.status(200).json({
+      message: "Profile updated successfully",
+      profilePic: profilePicPath,
+      result: result
     });
+
   } catch (err) {
     console.error("Server Error:", err);
     return res.status(500).json({ message: "Server error", error: err.message });
