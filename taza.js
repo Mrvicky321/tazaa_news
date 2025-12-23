@@ -203,6 +203,38 @@ app.get("/api/categories", async (req, res) => {
     }
 });
 
+//=============================
+// GET USER PROFILE
+//=============================
+app.get("/api/user/profile", async (req, res) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+        return res.status(401).json({ message: "Token required" });
+    }
+
+    const token = authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : authHeader;
+
+    try {
+        const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
+
+        const [[user]] = await db.query(
+            "SELECT id, name, email, profilePic FROM users WHERE id=?",
+            [decoded.id]
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json({ user });
+
+    } catch (error) {
+        res.status(401).json({ message: "Invalid or expired token" });
+    }
+});
 
 
 
