@@ -7,6 +7,8 @@ const multer = require("multer");
 const e = require("express");
 const path = require("path");
 app.use(express.json());
+const ACCESS_TOKEN_SECRET = "access_secret_123";
+const REFRESH_TOKEN_SECRET = "refresh_secret_456";
 
 
 
@@ -52,43 +54,105 @@ app.post("/api/user/register", async (request, response) => {
 // ======================================================
 // USER LOGIN
 // ======================================================
-app.post("/api/user/login", async (request, response) => {
-    const email = request.body.email;
-    const password = request.body.password;
-
-    const secretKey = "ghdfjjgi9ew8865w";
+app.post("/api/user/login", async (req, res) => {
+    const { email, password } = req.body;
 
     try {
-        const [result] = await db.query(
-            "SELECT id, name, email, password, role FROM users WHERE email=?",
+        const [rows] = await db.query(
+            "SELECT * FROM users WHERE email=?",
             [email]
         );
 
-        if (result.length === 0) {
-            return response.status(401).json({ message: "Invalid email or password" });
+        if (rows.length === 0) {
+            return res.status(401).json({ message: "Invalid credentials" });
         }
 
-        const user = result[0];
-        const isPasswordSame = await bcrypt.compare(password, user.password);
+        const user = rows[0];
+        const isMatch = await bcrypt.compare(password, user.password);
 
-        if (isPasswordSame) {
-            const token = jwt.sign(
-                { id: user.id, name: user.name, email: user.email, role: user.role },
-                secretKey,
-                { expiresIn: "1h" }
-            );
-
-            return response.status(200).json({
-                message: "Login successful",
-                token: token
-            });
-        } else {
-            return response.status(401).json({ message: "Invalid email or password" });
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid credentials" });
         }
 
-    } catch (error) {
-        return response.status(500).json({ message: "Internal server error" });
+        // ACCESS TOKEN (SHORT)
+        const accessToken = jwt.sign(
+            { id: user.id, email: user.email },
+            ACCESS_TOKEN_SECRET,
+            { expiresIn: "15m" }
+        );
+
+        // REFRESH TOKEN (LONG)
+        const refreshToken = jwt.sign(
+            { id: user.id },
+            REFRESH_TOKEN_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Save refresh token in DB
+        await db.query(
+            "UPDATE users SET refresh_token=? WHERE id=?",
+            [refreshToken, user.id]
+        );
+
+        res.json({
+            message: "Login successful",
+            accessToken,
+            refreshToken
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
     }
+});
+// refresh token endpoint
+
+app.post("/api/token/refresh", async (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(401).json({ message: "Refresh token required" });
+    }
+
+    try {
+        // verify refresh token
+        const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
+
+        const [[user]] = await db.query(
+            "SELECT id FROM users WHERE id=? AND refresh_token=?",
+            [decoded.id, refreshToken]
+        );
+
+        if (!user) {
+            return res.status(403).json({ message: "Invalid refresh token" });
+        }
+
+        // generate new access token
+        const newAccessToken = jwt.sign(
+            { id: user.id },
+            ACCESS_TOKEN_SECRET,
+            { expiresIn: "15m" }
+        );
+
+        res.json({
+            accessToken: newAccessToken
+        });
+
+    } catch (err) {
+        res.status(403).json({ message: "Token expired or invalid" });
+    }
+});
+
+
+//logout endpoint
+app.post("/api/logout", async (req, res) => {
+    const { user_id } = req.body;
+
+    await db.query(
+        "UPDATE users SET refresh_token=NULL WHERE id=?",
+        [user_id]
+    );
+
+    res.json({ message: "Logged out successfully" });
 });
 
 // ======================================================
