@@ -106,8 +106,12 @@ app.post("/api/user/login", async (req, res) => {
 });
 // refresh token endpoint
 
-app.post("/api/token/refresh", async (req, res) => {
+
+    app.post("/api/token/refresh", async (req, res) => {
+    console.log("BODY =>", req.body);   // 👈 ADD THIS
+
     const { refreshToken } = req.body;
+
 
     if (!refreshToken) {
         return res.status(401).json({ message: "Refresh token required" });
