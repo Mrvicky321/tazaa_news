@@ -1,4 +1,5 @@
 const express = require("express");
+const PORT = process.env.PORT || 5000;
 const db = require("./db");
 const app = express();
 const bcrypt = require("bcrypt");
@@ -9,6 +10,8 @@ const path = require("path");
 app.use(express.json());
 const ACCESS_TOKEN_SECRET = "access_secret_123";
 const REFRESH_TOKEN_SECRET = "refresh_secret_456";
+require("dotenv").config();
+
 
 
 
@@ -483,6 +486,11 @@ app.post("/api/share", async (req, res) => {
 // ======================================================
 // START SERVER
 // ======================================================
-app.listen(4003, () => {
-    console.log("Server is running on port 4003");
-});
+// app.listen(4003, () => {
+//     console.log("Server is running on port 4003");
+// });
+
+app.listen(PORT,"0.0.0.0",()=>{
+    console.log(`Server is running on port ${PORT}`);
+})
+module.exports = app;
