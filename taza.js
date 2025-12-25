@@ -1,5 +1,4 @@
 const express = require("express");
-const PORT = process.env.PORT || 5000;
 const db = require("./db");
 const app = express();
 const bcrypt = require("bcrypt");
@@ -11,6 +10,9 @@ app.use(express.json());
 const ACCESS_TOKEN_SECRET = "access_secret_123";
 const REFRESH_TOKEN_SECRET = "refresh_secret_456";
 require("dotenv").config();
+// 3️⃣ PORT define
+const PORT = process.env.PORT || 5000;
+
 
 
 
