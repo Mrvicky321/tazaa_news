@@ -483,22 +483,509 @@ app.post("/api/share", async (req, res) => {
 
 
 
-// ======================================================
-// EXTERNAL NEWS API INTEGRATION
-// ======================================================
-app.get("/api/news", async (req, res) => {
-  const { category, page } = req.query;
 
-  const url = `https://gnews.io/api/v4/top-headlines?category=${category}&lang=en&country=us&max=10&page=${page}&apikey=8aebebfe3fda12a8d9bbdd47259aff28`;
 
-  const response = await fetch(url);
-  const data = await response.json();
 
-  res.json(data);
+//send otp api
+
+app.post("/api/auth/send-otp", async (request, response) => {
+    const email = request.body.email;
+
+    try {
+        // Validation
+        if (!email) {
+            return response.status(400).json({
+                message: "Email is required",
+            });
+        }
+
+        // Generate random 6-digit OTP
+        const otp = crypto.randomInt(100000, 999999).toString();
+
+        // Save OTP in DB
+        await db.query(
+            "INSERT INTO password_reset_otps (email, otp) VALUES (?, ?)",
+            [email, otp]
+        );
+
+        // TODO: Send OTP email (optional, if needed)
+        console.log("Generated OTP:", otp);
+
+        // Success Response
+        response.status(200).json({
+            message: "OTP sent successfully",
+            email: email,
+            otp: otp, // show in response for testing — remove in production
+        });
+
+    } catch (error) {
+        console.error("Send OTP Error:", error);
+        response.status(500).json({
+            message: "Internal server error",
+        });
+    }
+});
+
+
+//======================================================
+// RESET PASSWORD API
+//======================================================
+
+app.post("/api/auth/reset-password", async (request, response) => {
+    const { email, otp, newPassword } = request.body;
+
+    try {
+
+        // Validation
+        if (!email || !otp || !newPassword) {
+            return response.status(400).json({
+                message: "email, otp & newPassword are required",
+            });
+        }
+
+        // Check OTP
+        const [otpRecord] = await db.query(
+            "SELECT * FROM password_reset_otps WHERE email=? AND otp=? ORDER BY createdAt DESC LIMIT 1",
+            [email, otp]
+        );
+
+        if (otpRecord.length === 0) {
+            return response.status(400).json({
+                message: "Invalid or expired OTP",
+            });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update user password
+        await db.query(
+            "UPDATE users SET password=? WHERE email=?",
+            [hashedPassword, email]
+        );
+
+        // Delete OTP after use
+        await db.query(
+            "DELETE FROM password_reset_otps WHERE email=?",
+            [email]
+        );
+
+        // Success Response
+        response.status(200).json({
+            message: "Password reset successfully",
+            email: email,
+        });
+
+    } catch (error) {
+        console.error("Reset Password Error:", error);
+        response.status(500).json({
+            message: "Internal server error",
+        });
+    }
 });
 
 
 
+
+//
+//  CREATE POST 
+
+const postStorage = multer.diskStorage({
+    destination: "./uploads/posts",
+    filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+});
+const uploadPost = multer({ storage: postStorage });
+
+app.post("/api/posts/create", uploadPost.single("post"), async (request, response) => {
+    const user_id = request.body.user_id;
+    const caption = request.body.caption;
+    const img = request.file.filename;
+
+    await db.query(
+        "INSERT INTO posts(user_id, caption, image) VALUES (?,?,?)",
+        [user_id, caption, img]
+    );
+
+    response.json({ message: "Post Created" });
+});
+
+// ======================================================
+// GET ALL POSTS
+app.get("/api/posts/all", async (request, response) => {
+    const [rows] = await db.query(
+        "SELECT posts.*, users.username, users.profile_image FROM posts JOIN users ON posts.user_id = users.id ORDER BY posts.id DESC"
+    );
+
+    response.json(rows);
+});
+// ======================================================
+//delete post
+
+app.post("/api/posts/delete", async (req, res) => {
+  try {
+    const { post_id } = req.body;
+
+    // Delete related data first:
+    await db.query("DELETE FROM likes WHERE post_id=?", [post_id]);
+    await db.query("DELETE FROM comments WHERE post_id=?", [post_id]);
+    await db.query("DELETE FROM saved_posts WHERE post_id=?", [post_id]);
+    await db.query("DELETE FROM shares WHERE post_id=?", [post_id]);
+
+    // Then delete post
+    await db.query("DELETE FROM posts WHERE id=?", [post_id]);
+
+    res.json({ message: "Post Deleted!" });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Delete failed", error });
+  }
+});
+
+// ======================================================
+//get users post 
+
+app.get("/api/posts/user/:user_id", async (req, res) => {
+  try {
+    const user_id = req.params.user_id;
+    const baseUrl = "https://vibelyapi.onrender.com/uploads/posts/";
+
+    const [rows] = await db.query(
+      "SELECT * FROM posts WHERE user_id=? ORDER BY id DESC",
+      [user_id]
+    );
+
+    const response = rows.map(post => ({
+      ...post,
+      image: baseUrl + post.image
+    }));
+
+    res.json(response);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json([]);
+  }
+});
+
+
+// ======================================================
+
+//get single post
+
+app.get("/api/posts/single/:id", async (request, response) => {
+    const post_id = request.params.id;
+
+    const [rows] = await db.query(
+        "SELECT * FROM posts WHERE id=?", 
+        [post_id]
+    );
+
+    response.json(rows[0]);
+});
+
+
+
+
+
+
+//  SAVE POST 
+app.post("/api/posts/save", async (request, response) => {
+    const user_id = request.body.user_id;
+    const post_id = request.body.post_id;
+
+    await db.query(
+        "INSERT INTO saved_posts(user_id, post_id) VALUES(?,?)",
+        [user_id, post_id]
+    );
+
+    response.json({ message: "Post Saved!" });
+});
+
+//
+//  GET SAVED POSTS 
+app.get("/api/posts/saved/:user_id", async (request, response) => {
+    const user_id = request.params.user_id;
+
+    const [rows] = await db.query(
+        "SELECT posts.* FROM saved_posts JOIN posts ON saved_posts.post_id = posts.id WHERE saved_posts.user_id=?",
+        [user_id]
+    );
+
+    response.json(rows);
+});
+
+//  UNSAVE POST
+
+app.post("/api/posts/unsave", async (request, response) => {
+    const user_id = request.body.user_id;
+    const post_id = request.body.post_id;
+
+    await db.query(
+        "DELETE FROM saved_posts WHERE user_id=? AND post_id=?",
+        [user_id, post_id]
+    );
+
+    response.json({ message: "Post Unsaved!" });
+});
+
+// ======================================================
+// add comment
+
+app.post("/api/comment/add", async (request, response) => {
+    const post_id = request.body.post_id;
+    const user_id = request.body.user_id;
+    const comment = request.body.comment;
+
+    await db.query(
+        "INSERT INTO comments(post_id, user_id, comment) VALUES(?,?,?)",
+        [post_id, user_id, comment]
+    );
+
+    response.json({ message: "Comment Added!" });
+});
+
+
+
+
+//get comment by post
+
+app.get("/api/comment/:post_id", async (request, response) => {
+    const post_id = request.params.post_id;
+
+    const [rows] = await db.query(
+        `SELECT comments.*, users.username, users.profile_image 
+         FROM comments 
+         JOIN users ON comments.user_id = users.id 
+         WHERE comments.post_id=? ORDER BY comments.id DESC`,
+        [post_id]
+    );
+
+    response.json(rows);
+});
+
+// ======================================================
+
+
+// update comment
+
+app.post("/api/comment/update", async (req, res) => {
+  try {
+    const { comment_id, comment } = req.body;
+
+    if (!comment_id || !comment) {
+      return res.status(400).json({ message: "comment_id & comment are required" });
+    }
+
+    await db.query(
+      "UPDATE comments SET comment=? WHERE id=?",
+      [comment, comment_id]
+    );
+
+    res.json({ message: "Comment Updated!" });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Update failed", error });
+  }
+});
+
+//
+// delete comment
+
+app.post("/api/comment/delete", async (req, res) => {
+  try {
+    const { comment_id } = req.body;
+
+    if (!comment_id) {
+      return res.status(400).json({ message: "comment_id required" });
+    }
+
+    await db.query(
+      "DELETE FROM comments WHERE id=?",
+      [comment_id]
+    );
+
+    res.json({ message: "Comment Deleted!" });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Delete failed", error });
+  }
+});
+
+
+// ======================================================
+
+//like post
+
+app.post("/api/posts/like", async (req, res) => {
+  const { post_id, user_id } = req.body;
+
+  // 🔎 check already liked
+  const [rows] = await db.query(
+    "SELECT id FROM likes WHERE post_id=? AND user_id=?",
+    [post_id, user_id]
+  );
+
+  if (rows.length > 0) {
+    return res.status(200).json({ message: "Already liked" });
+  }
+
+  await db.query(
+    "INSERT INTO likes(post_id, user_id) VALUES(?,?)",
+    [post_id, user_id]
+  );
+
+  res.json({ message: "Post liked" });
+});
+
+//
+//already liked api get 
+
+app.get("/api/posts/liked/:userId", async (req, res) => {
+  const userId = req.params.userId;
+
+  const [rows] = await db.query(
+    "SELECT post_id FROM likes WHERE user_id=?",
+    [userId]
+  );
+
+  res.json(rows.map(r => r.post_id));
+});
+
+
+
+
+
+//unlike post
+
+app.post("/api/posts/unlike", async (request, response) => {
+    const post_id = request.body.post_id;
+    const user_id = request.body.user_id;
+
+    await db.query(
+        "DELETE FROM likes WHERE post_id=? AND user_id=?",
+        [post_id, user_id]
+    );
+
+    response.json({ message: "Post Unliked!" });
+});
+
+// ======================================================
+
+//get like count
+
+app.get("/api/posts/likes/:post_id", async (request, response) => {
+    const post_id = request.params.post_id;
+
+    const [rows] = await db.query(
+        "SELECT COUNT(*) AS likes FROM likes WHERE post_id=?",
+        [post_id]
+    );
+
+    response.json(rows[0]);
+});
+
+
+// ======================================================
+// get comment count by post_id
+
+app.get("/api/posts/comments/count/:post_id", async (req, res) => {
+  try {
+    const post_id = req.params.post_id;
+
+    const [rows] = await db.query(
+      "SELECT COUNT(*) AS comments FROM comments WHERE post_id=?",
+      [post_id]
+    );
+
+    res.json(rows[0]); // { comments: number }
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to get comment count" });
+  }
+});
+
+// ======================================================
+//count share post
+
+app.post("/api/posts/share", async (request, response) => {
+    const post_id = request.body.post_id;
+    const user_id = request.body.user_id;
+
+    await db.query(
+        "INSERT INTO shares(post_id, user_id) VALUES(?,?)",
+        [post_id, user_id]
+    );
+
+    response.json({ message: "Post Shared!" });
+});
+
+
+
+
+///follow user
+
+app.post("/api/user/follow", async (req, res) => {
+  const { follower_id, following_id } = req.body;
+
+  await db.query(
+    "INSERT INTO followers (follower_id, following_id) VALUES (?, ?)",
+    [follower_id, following_id]
+  );
+
+  res.json({ message: "User Followed" });
+});
+
+
+
+
+//unfollow user
+
+app.post("/api/user/unfollow", async (req, res) => {
+  const { follower_id, following_id } = req.body;
+
+  await db.query(
+    "DELETE FROM followers WHERE follower_id=? AND following_id=?",
+    [follower_id, following_id]
+  );
+
+  res.json({ message: "User Unfollowed" });
+});
+
+
+
+
+//get followers list
+
+app.get("/api/user/followers/:user_id", async (req, res) => {
+  const user_id = req.params.user_id;
+
+  const [rows] = await db.query(
+    "SELECT users.* FROM followers JOIN users ON followers.follower_id = users.id WHERE followers.following_id=?",
+    [user_id]
+  );
+
+  res.json(rows);
+});
+
+
+
+
+//get following list
+
+app.get("/api/user/following/:user_id", async (req, res) => {
+  const user_id = req.params.user_id;
+
+  const [rows] = await db.query(
+    "SELECT users.* FROM followers JOIN users ON followers.following_id = users.id WHERE followers.follower_id=?",
+    [user_id]
+  );
+
+  res.json(rows);
+});
 
 
 
