@@ -483,6 +483,23 @@ app.post("/api/share", async (req, res) => {
 
 
 
+// ======================================================
+// EXTERNAL NEWS API INTEGRATION
+// ======================================================
+app.get("/api/news", async (req, res) => {
+  const { category, page } = req.query;
+
+  const url = `https://gnews.io/api/v4/top-headlines?category=${category}&lang=en&country=us&max=10&page=${page}&apikey=8aebebfe3fda12a8d9bbdd47259aff28`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  res.json(data);
+});
+
+
+
+
 
 
 // ======================================================
