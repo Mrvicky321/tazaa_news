@@ -350,63 +350,9 @@ app.get("/api/user/profile", async (req, res) => {
     }
 });
 
-
-
-app.post("/api/like", async (req, res) => {
-    const { user_id, post_id } = req.body;
-
-    try {
-        await db.query(
-          "INSERT INTO likes(user_id, post_id) VALUES(?, ?)", 
-          [user_id, post_id]
-        );
-
-        res.status(201).json({ message: "Post Liked" });
-
-    } catch (err) {
-        if (err.errno === 1062) {
-            return res.status(409).json({ message: "Already Liked" });
-        }
-        res.status(500).json({ message: "Server Error" });
-    }
-});
-
-
-app.post("/api/unlike", async (req, res) => {
-    const { user_id, post_id } = req.body;
-
-    try {
-        await db.query(
-          "DELETE FROM likes WHERE user_id=? AND post_id=?", 
-          [user_id, post_id]
-        );
-
-        res.status(200).json({ message: "Like Removed" });
-
-    } catch (err) {
-        res.status(500).json({ message: "Server Error" });
-    }
-});
-
-
-app.post("/api/comment", async (req, res) => {
-    const { user_id, post_id, comment } = req.body;
-
-    try {
-        const [result] = await db.query(
-          "INSERT INTO comments(user_id, post_id, comment) VALUES(?, ?, ?)",
-          [user_id, post_id, comment]
-        );
-
-        res.status(201).json({
-            id: result.insertId,
-            comment: comment
-        });
-
-    } catch (err) {
-        res.status(500).json({ message: "Server Error" });
-    }
-});
+// ======================================================
+// GET COMMENTS BY POST ID
+// ======================================================
 
 
 app.get("/api/comment/:post_id", async (req, res) => {
@@ -427,42 +373,6 @@ app.get("/api/comment/:post_id", async (req, res) => {
 
 
 
-
-app.post("/api/follow", async (req, res) => {
-    const { follower_id, following_id } = req.body;
-
-    try {
-        await db.query(
-            "INSERT INTO follows(follower_id, following_id) VALUES(?, ?)",
-            [follower_id, following_id]
-        );
-
-        res.status(201).json({ message: "User Followed" });
-
-    } catch (err) {
-        if (err.errno === 1062) {
-            return res.status(409).json({ message: "Already Following" });
-        }
-        res.status(500).json({ message: "Server Error" });
-    }
-});
-
-
-app.post("/api/unfollow", async (req, res) => {
-    const { follower_id, following_id } = req.body;
-
-    try {
-        await db.query(
-            "DELETE FROM follows WHERE follower_id=? AND following_id=?",
-            [follower_id, following_id]
-        );
-
-        res.status(200).json({ message: "Unfollowed" });
-
-    } catch (err) {
-        res.status(500).json({ message: "Server Error" });
-    }
-});
 
 
 app.post("/api/share", async (req, res) => {
@@ -611,13 +521,20 @@ app.post("/api/posts/create", uploadPost.single("post"), async (request, respons
 
 // ======================================================
 // GET ALL POSTS
-app.get("/api/posts/all", async (request, response) => {
-    const [rows] = await db.query(
-        "SELECT posts.*, users.username, users.profile_image FROM posts JOIN users ON posts.user_id = users.id ORDER BY posts.id DESC"
-    );
+app.get("/api/posts/all", async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            "SELECT posts.*, users.username, users.profile_image FROM posts JOIN users ON posts.user_id = users.id ORDER BY posts.id DESC"
+        );
 
-    response.json(rows);
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server Error" });
+    }
 });
+
+
 // ======================================================
 //delete post
 
