@@ -522,17 +522,21 @@ app.post("/api/posts/create", uploadPost.single("post"), async (request, respons
 // ======================================================
 // GET ALL POSTS
 app.get("/api/posts/all", async (req, res) => {
-    try {
-        const [rows] = await db.query(
-            "SELECT posts.*, users.username, users.profile_image FROM posts JOIN users ON posts.user_id = users.id ORDER BY posts.id DESC"
-        );
+  try {
+    const [rows] = await db.query(
+      `SELECT posts.*, users.username, users.profile_image
+       FROM posts
+       LEFT JOIN users ON posts.user_id = users.id
+       ORDER BY posts.id DESC`
+    );
 
-        res.json(rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Server Error" });
-    }
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
+  }
 });
+
 
 
 // ======================================================
