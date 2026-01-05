@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 5000;
 
 
 // ======================================================
-// USER LIST
+// USER LIST 
 // ======================================================
 app.get("/api/user", async (request, response) => {
     const [result] =await db.query("SELECT * FROM users");
@@ -26,7 +26,7 @@ app.get("/api/user", async (request, response) => {
 });
 
 // ======================================================
-// USER REGISTER
+// USER REGISTER 
 // ======================================================
 app.post("/api/user/register", async (request, response) => {
     const name = request.body.name;
@@ -521,21 +521,30 @@ app.post("/api/posts/create", uploadPost.single("post"), async (request, respons
 
 // ======================================================
 // GET ALL POSTS
+
 app.get("/api/posts/all", async (req, res) => {
   try {
-    const [rows] = await db.query(
-      `SELECT posts.*, users.username, users.profile_image
+    const [posts] = await db.query(
+      `SELECT 
+          posts.id,
+          posts.caption,
+          posts.image,
+          posts.created_at,
+          users.id AS user_id,
+          users.username,
+          users.profile_image
        FROM posts
-       LEFT JOIN users ON posts.user_id = users.id
+       JOIN users ON posts.user_id = users.id
        ORDER BY posts.id DESC`
     );
 
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
+    res.status(200).json(posts);
+  } catch (error) {
+    console.error("Error fetching posts:", error);
     res.status(500).json({ message: "Server Error" });
   }
 });
+
 
 
 
@@ -569,8 +578,8 @@ app.post("/api/posts/delete", async (req, res) => {
 app.get("/api/posts/user/:user_id", async (req, res) => {
   try {
     const user_id = req.params.user_id;
-    const baseUrl = "https://vibelyapi.onrender.com/uploads/posts/";
-
+    const baseUrl = "https://tazaa-news.onrender.com/uploads/posts/";
+                     
     const [rows] = await db.query(
       "SELECT * FROM posts WHERE user_id=? ORDER BY id DESC",
       [user_id]
