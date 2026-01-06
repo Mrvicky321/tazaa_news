@@ -521,230 +521,193 @@ app.post("/api/posts/create", uploadPost.single("post"), async (request, respons
 
 // ======================================================
 // GET ALL POSTS
-
 app.get("/api/posts/all", async (req, res) => {
   try {
-    const [posts] = await db.query(
-      `SELECT 
-          posts.id,
-          posts.caption,
-          posts.image,
-          posts.created_at,
-          users.id AS user_id,
-          users.username,
-          users.profile_image
-       FROM posts
-       JOIN users ON posts.user_id = users.id
-       ORDER BY posts.id DESC`
-    );
+    const [rows] = await db.query(`
+      SELECT 
+        posts.id,
+        posts.user_id,
+        posts.caption,
+        posts.image,
+        posts.created_at,
+        users.name AS username,
+        users.profilePic AS profile_image
+      FROM posts
+      JOIN users ON posts.user_id = users.id
+      ORDER BY posts.id DESC
+    `);
 
-    res.status(200).json(posts);
+    res.json({
+      success: true,
+      posts: rows
+    });
   } catch (error) {
-    console.error("Error fetching posts:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
 });
 
 
 
 
-// ======================================================
-//delete post
 
+// ======================================================
+// DELETE POST
+// ======================================================
 app.post("/api/posts/delete", async (req, res) => {
   try {
-    const { post_id } = req.body;
+    const { id } = req.body;   // <-- POST ID
 
-    // Delete related data first:
-    await db.query("DELETE FROM likes WHERE post_id=?", [post_id]);
-    await db.query("DELETE FROM comments WHERE post_id=?", [post_id]);
-    await db.query("DELETE FROM saved_posts WHERE post_id=?", [post_id]);
-    await db.query("DELETE FROM shares WHERE post_id=?", [post_id]);
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Post id is required"
+      });
+    }
 
-    // Then delete post
-    await db.query("DELETE FROM posts WHERE id=?", [post_id]);
+    // Delete related data
+    await db.query("DELETE FROM likes WHERE post_id=?", [id]);
+    await db.query("DELETE FROM comments WHERE post_id=?", [id]);
+    await db.query("DELETE FROM shares WHERE post_id=?", [id]);
 
-    res.json({ message: "Post Deleted!" });
+    // Delete post
+    const [result] = await db.query(
+      "DELETE FROM posts WHERE id=?",
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Post deleted successfully"
+    });
 
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Delete failed", error });
+    console.error("DELETE POST ERROR 👉", error);
+    res.status(500).json({
+      success: false,
+      message: error.sqlMessage || error.message
+    });
   }
 });
 
 // ======================================================
-//get users post 
-
-app.get("/api/posts/user/:user_id", async (req, res) => {
+// DELETE POSTS BY USER ID
+// ======================================================
+app.post("/api/posts/delete-by-user", async (req, res) => {
   try {
-    const user_id = req.params.user_id;
-    const baseUrl = "https://tazaa-news.onrender.com/uploads/posts/";
-                     
-    const [rows] = await db.query(
-      "SELECT * FROM posts WHERE user_id=? ORDER BY id DESC",
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id is required"
+      });
+    }
+
+    // Delete related data first
+    await db.query(`
+      DELETE likes FROM likes
+      JOIN posts ON likes.post_id = posts.id
+      WHERE posts.user_id = ?
+    `, [user_id]);
+
+    await db.query(`
+      DELETE comments FROM comments
+      JOIN posts ON comments.post_id = posts.id
+      WHERE posts.user_id = ?
+    `, [user_id]);
+
+    await db.query(`
+      DELETE shares FROM shares
+      JOIN posts ON shares.post_id = posts.id
+      WHERE posts.user_id = ?
+    `, [user_id]);
+
+    // Delete posts
+    const [result] = await db.query(
+      "DELETE FROM posts WHERE user_id=?",
       [user_id]
     );
 
-    const response = rows.map(post => ({
-      ...post,
-      image: baseUrl + post.image
-    }));
-
-    res.json(response);
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json([]);
-  }
-});
-
-
-// ======================================================
-
-//get single post
-
-app.get("/api/posts/single/:id", async (request, response) => {
-    const post_id = request.params.id;
-
-    const [rows] = await db.query(
-        "SELECT * FROM posts WHERE id=?", 
-        [post_id]
-    );
-
-    response.json(rows[0]);
-});
-
-
-
-
-
-
-//  SAVE POST 
-app.post("/api/posts/save", async (request, response) => {
-    const user_id = request.body.user_id;
-    const post_id = request.body.post_id;
-
-    await db.query(
-        "INSERT INTO saved_posts(user_id, post_id) VALUES(?,?)",
-        [user_id, post_id]
-    );
-
-    response.json({ message: "Post Saved!" });
-});
-
-//
-//  GET SAVED POSTS 
-app.get("/api/posts/saved/:user_id", async (request, response) => {
-    const user_id = request.params.user_id;
-
-    const [rows] = await db.query(
-        "SELECT posts.* FROM saved_posts JOIN posts ON saved_posts.post_id = posts.id WHERE saved_posts.user_id=?",
-        [user_id]
-    );
-
-    response.json(rows);
-});
-
-//  UNSAVE POST
-
-app.post("/api/posts/unsave", async (request, response) => {
-    const user_id = request.body.user_id;
-    const post_id = request.body.post_id;
-
-    await db.query(
-        "DELETE FROM saved_posts WHERE user_id=? AND post_id=?",
-        [user_id, post_id]
-    );
-
-    response.json({ message: "Post Unsaved!" });
-});
-
-// ======================================================
-// add comment
-
-app.post("/api/comment/add", async (request, response) => {
-    const post_id = request.body.post_id;
-    const user_id = request.body.user_id;
-    const comment = request.body.comment;
-
-    await db.query(
-        "INSERT INTO comments(post_id, user_id, comment) VALUES(?,?,?)",
-        [post_id, user_id, comment]
-    );
-
-    response.json({ message: "Comment Added!" });
-});
-
-
-
-
-//get comment by post
-
-app.get("/api/comment/:post_id", async (request, response) => {
-    const post_id = request.params.post_id;
-
-    const [rows] = await db.query(
-        `SELECT comments.*, users.username, users.profile_image 
-         FROM comments 
-         JOIN users ON comments.user_id = users.id 
-         WHERE comments.post_id=? ORDER BY comments.id DESC`,
-        [post_id]
-    );
-
-    response.json(rows);
-});
-
-// ======================================================
-
-
-// update comment
-
-app.post("/api/comment/update", async (req, res) => {
-  try {
-    const { comment_id, comment } = req.body;
-
-    if (!comment_id || !comment) {
-      return res.status(400).json({ message: "comment_id & comment are required" });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No posts found for this user"
+      });
     }
 
-    await db.query(
-      "UPDATE comments SET comment=? WHERE id=?",
-      [comment, comment_id]
-    );
-
-    res.json({ message: "Comment Updated!" });
+    res.json({
+      success: true,
+      message: `All posts deleted for user_id ${user_id}`
+    });
 
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Update failed", error });
+    console.error("DELETE POSTS BY USER ERROR 👉", error);
+    res.status(500).json({
+      success: false,
+      message: error.sqlMessage || error.message
+    });
   }
 });
 
-//
-// delete comment
 
-app.post("/api/comment/delete", async (req, res) => {
+// ======================================================
+// SAVE POST
+// ======================================================
+app.post("/api/posts/save", async (req, res) => {
   try {
-    const { comment_id } = req.body;
+    const { user_id, id } = req.body; 
+    // id = posts.id (POST ID)
 
-    if (!comment_id) {
-      return res.status(400).json({ message: "comment_id required" });
+    if (!user_id || !id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id and post id are required"
+      });
     }
 
-    await db.query(
-      "DELETE FROM comments WHERE id=?",
-      [comment_id]
+    // already saved check
+    const [exists] = await db.query(
+      "SELECT id FROM saved_posts WHERE user_id=? AND post_id=?",
+      [user_id, id]
     );
 
-    res.json({ message: "Comment Deleted!" });
+    if (exists.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Post already saved"
+      });
+    }
+
+    // save
+    await db.query(
+      "INSERT INTO saved_posts(user_id, post_id) VALUES (?,?)",
+      [user_id, id]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Post saved successfully"
+    });
 
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Delete failed", error });
+    console.error("SAVE POST ERROR 👉", error);
+    res.status(500).json({
+      success: false,
+      message: error.sqlMessage || error.message
+    });
   }
 });
-
-
 // ======================================================
 
 //like post
