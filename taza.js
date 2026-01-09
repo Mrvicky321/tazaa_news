@@ -350,26 +350,6 @@ app.get("/api/user/profile", async (req, res) => {
     }
 });
 
-// ======================================================
-// GET COMMENTS BY POST ID
-// ======================================================
-
-
-app.get("/api/comment/:post_id", async (req, res) => {
-    const postId = req.params.post_id;
-
-    try {
-        const [rows] = await db.query(
-          "SELECT c.id, c.comment, u.name FROM comments c JOIN users u ON c.user_id=u.id WHERE post_id=? ORDER BY c.id DESC",
-          [postId]
-        );
-
-        res.status(200).json(rows);
-
-    } catch (err) {
-        res.status(500).json({ message: "Server Error" });
-    }
-});
 
 
 
@@ -518,6 +498,8 @@ app.post("/api/posts/create", uploadPost.single("post"), async (request, respons
 
     response.json({ message: "Post Created" });
 });
+
+
 
 // ======================================================
 // GET ALL POSTS
@@ -710,6 +692,34 @@ app.post("/api/posts/save", async (req, res) => {
 });
 // ======================================================
 
+
+
+// GET SAVE COUNT
+
+app.get("/api/posts/save-count/:postId", async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    const [rows] = await db.query(
+      "SELECT COUNT(*) AS saveCount FROM saved_posts WHERE post_id=?",
+      [postId]
+    );
+
+    res.json({
+      success: true,
+      post_id: postId,
+      saveCount: rows[0].saveCount
+    });
+
+  } catch (error) {
+    console.error("SAVE COUNT ERROR 👉", error);
+    res.status(500).json({
+      success: false,
+      message: error.sqlMessage || error.message
+    });
+  }
+});
+
 //like post
 
 app.post("/api/posts/like", async (req, res) => {
@@ -781,6 +791,36 @@ app.get("/api/posts/likes/:post_id", async (request, response) => {
 });
 
 
+
+// ======================================================
+// ADD COMMENT TO POST
+// ======================================================
+
+app.post("/api/comments/add", async (req, res) => {
+  try {
+    const { post_id, user_id, comment } = req.body;
+
+    if (!post_id || !user_id || !comment) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const [result] = await db.query(
+      "INSERT INTO comments (post_id, user_id, comment) VALUES (?, ?, ?)",
+      [post_id, user_id, comment]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Comment added successfully",
+      comment_id: result.insertId
+    });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to add comment" });
+  }
+});
+
 // ======================================================
 // get comment count by post_id
 
@@ -800,6 +840,54 @@ app.get("/api/posts/comments/count/:post_id", async (req, res) => {
     res.status(500).json({ message: "Failed to get comment count" });
   }
 });
+
+// ======================================================
+// GET COMMENTS BY POST ID
+// ======================================================
+
+
+app.get("/api/comment/:post_id", async (req, res) => {
+    const postId = req.params.post_id;
+
+    try {
+        const [rows] = await db.query(
+          "SELECT c.id, c.comment, u.name FROM comments c JOIN users u ON c.user_id=u.id WHERE post_id=? ORDER BY c.id DESC",
+          [postId]
+        );
+
+        res.status(200).json(rows);
+
+    } catch (err) {
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+// ======================================================
+// DELETE COMMENT BY COMMENT ID
+// ====================================================== 
+
+app.delete("/api/comments/delete/:comment_id", async (req, res) => {
+  try {
+    const comment_id = req.params.comment_id;
+
+    const [result] = await db.query(
+      "DELETE FROM comments WHERE id = ?",
+      [comment_id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    res.json({ success: true, message: "Comment deleted successfully" });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete comment" });
+  }
+});
+
+
 
 // ======================================================
 //count share post
