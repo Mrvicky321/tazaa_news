@@ -165,48 +165,154 @@ app.post("/api/logout", async (req, res) => {
 });
 
 // ======================================================
-// GET ALL NEWS
-// ======================================================
-app.get("/api/news", async (req, res) => {
+
+
+//GET SINGLE USERS USING TOKEN
+
+app.get("/api/user/profile", async (req, res) => {
+    const token = req.headers.authorization;
+    const secretKey = "asdfghjkl";
+
+    if (!token) {
+        return res.status(401).json({ message: "Token required" });
+    }
+
     try {
-        const [result] = await db.query("SELECT * FROM news ORDER BY id DESC");
-        res.status(200).json(result);
+        // Verify Token
+        const decoded = jwt.verify(token, secretKey);
+        const userId = decoded.id;
+
+        // Get Profile info
+        const [[user]] = await db.query(
+            "SELECT id, name, username, email, bio, profile_image FROM users WHERE id=?",
+            [userId]
+        );
+
+      
+
+       
+        user.profile_image = user.profile_image || null;
+
+        // Followers Count
+        const [[followers]] = await db.query(
+            "SELECT COUNT(*) AS total FROM followers WHERE following_id=?",
+            [userId]
+        );
+
+        // Following Count
+        const [[following]] = await db.query(
+            "SELECT COUNT(*) AS total FROM followers WHERE follower_id=?",
+            [userId]
+        );
+
+        // Posts Count
+        const [[posts]] = await db.query(
+            "SELECT COUNT(*) AS total FROM posts WHERE user_id=?",
+            [userId]
+        );
+
+        return res.json({
+            user,
+            stats: {
+                followers: followers.total,
+                following: following.total,
+                posts: posts.total
+            }
+        });
+
     } catch (error) {
-        res.status(500).json({ message: "Error fetching news" });
+        console.log(error);
+        return res.status(401).json({ message: "Invalid or expired token" });
     }
 });
 
+
 // ======================================================
-// GET SINGLE NEWS
-// ======================================================
-app.get("/api/news/:id", async (req, res) => {
-    const newsId = req.params.id;
+//Search user by name or username
+
+app.get("/api/user/search", async (req, res) => {
+    const search = req.query.q;  // frontend se q= keyword aayega
+
+    if (!search) {
+        return res.status(400).json({ message: "Search query required" });
+    }
+
     try {
-        const [result] = await db.query("SELECT * FROM news WHERE id=?", [newsId]);
+        // 🔹 Get matching users
+        const [users] = await db.query(
+            `SELECT id, name, username, bio, profile_image 
+             FROM users 
+             WHERE name LIKE ? OR username LIKE ?`,
+            [`%${search}%`, `%${search}%`]
+        );
 
-        if (result.length === 0) {
-            return res.status(404).json({ message: "News not found" });
-        }
+        // 🔹 Add stats + posts for each user
+        const usersWithStats = await Promise.all(
+            users.map(async (user) => {
+                // Profile image full URL
+                user.profile_image = user.profile_image || null;
 
-        res.status(200).json(result[0]);
+                // Followers count
+                const [[followers]] = await db.query(
+                    "SELECT COUNT(*) AS total FROM followers WHERE following_id=?",
+                    [user.id]
+                );
+
+                // Following count
+                const [[following]] = await db.query(
+                    "SELECT COUNT(*) AS total FROM followers WHERE follower_id=?",
+                    [user.id]
+                );
+
+                // Posts count
+                const [[postsCount]] = await db.query(
+                    "SELECT COUNT(*) AS total FROM posts WHERE user_id=?",
+                    [user.id]
+                );
+
+                // 🔹 Get posts with full image URL
+                const [posts] = await db.query(
+                    "SELECT id, caption, image FROM posts WHERE user_id=? ORDER BY id DESC",
+                    [user.id]
+                );
+
+                const postsWithURL = posts.map(post => ({
+                   ...post,
+                   image: post.image || null
+                 }));
+
+                return {
+                    ...user,
+                    stats: {
+                        followers: followers.total,
+                        following: following.total,
+                        posts: postsCount.total
+                    },
+                    posts: postsWithURL
+                };
+            })
+        );
+
+        res.json(usersWithStats);
+
     } catch (error) {
-        res.status(500).json({ message: "Error fetching news" });
+        console.log(error);
+        res.status(500).json({ message: "Search failed" });
     }
 });
 
 
 
-// ======================================================
-// GET CATEGORIES
-// ======================================================
-app.get("/api/categories", async (req, res) => {
-    try {
-        const [result] = await db.query("SELECT * FROM categories");
-        res.status(200).json(result);
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching categories" });
-    }
+
+
+
+//  GET ALL USERS 
+app.get("/api/user", async (request, response) => {
+    const [result] = await db.query("SELECT * FROM users");
+    response.status(200).json(result);
 });
+
+
 
 //=============================
 // GET USER PROFILE
