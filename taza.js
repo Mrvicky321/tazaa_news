@@ -386,7 +386,7 @@ app.post("/api/user/update-profile", uploadProfile.single("profilePic"), async (
       values.push(email);
     }
     if (profilePic) {
-      fields.push("profilePic=?");
+      fields.push("taazanews.edugaondev.com/profilePic=?");
       values.push(profilePic);
     }
 
