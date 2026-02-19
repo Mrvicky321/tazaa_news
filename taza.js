@@ -386,7 +386,7 @@ app.post("/api/user/update-profile", uploadProfile.single("profilePic"), async (
       values.push(email);
     }
     if (profilePic) {
-      fields.push("taazanews.edugaondev.com/profilePic=?");
+      fields.push("profilePic=?");
       values.push(profilePic);
     }
 
@@ -401,9 +401,11 @@ app.post("/api/user/update-profile", uploadProfile.single("profilePic"), async (
     await db.query(sql, values);
 
     res.status(200).json({
-      message: "Profile updated successfully",
-      profilePic: profilePic ? `profileImages/${profilePic}` : undefined,
-    });
+        message: "Profile updated successfully",
+        profilePic: profilePic
+          ? `https://taazanews.edugaondev.com/profileImages/${profilePic}`
+          : undefined
+      });
 
   } catch (err) {
     console.error("Server Error:", err);
